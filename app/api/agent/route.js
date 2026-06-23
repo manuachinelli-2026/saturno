@@ -38,29 +38,27 @@ Si el cliente dice que sí, celebra y diles que los contactará el equipo pronto
   }))
   messages.push({ role: 'user', content: incoming_message })
 
-  // Call Claude API
-  const anthropicRes = await fetch('https://api.anthropic.com/v1/messages', {
+  // Call OpenAI API
+  const openaiRes = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
     headers: {
-      'x-api-key': process.env.ANTHROPIC_API_KEY || '',
-      'anthropic-version': '2023-06-01',
+      'Authorization': `Bearer ${process.env.OPENAI_API_KEY || ''}`,
       'Content-Type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-haiku-4-5-20251001',
+      model: 'gpt-4o-mini',
       max_tokens: 300,
-      system: systemPrompt,
-      messages,
+      messages: [{ role: 'system', content: systemPrompt }, ...messages],
     }),
   })
 
-  if (!anthropicRes.ok) {
-    const err = await anthropicRes.json()
+  if (!openaiRes.ok) {
+    const err = await openaiRes.json()
     return Response.json({ error: err.error?.message || 'AI error' }, { status: 500 })
   }
 
-  const aiData = await anthropicRes.json()
-  const aiReply = aiData.content?.[0]?.text || ''
+  const aiData = await openaiRes.json()
+  const aiReply = aiData.choices?.[0]?.message?.content || ''
 
   if (!aiReply || !lead?.phone) return Response.json({ reply: aiReply, sent: false })
 
