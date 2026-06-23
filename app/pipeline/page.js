@@ -153,40 +153,50 @@ export default function PipelinePage() {
       }
     }
 
-    // STEP 3: Send WhatsApp messages
+    // STEP 3: Send WhatsApp messages with line rotation (anti-ban)
     setStep('messaging')
     const toMessage = savedIds.filter(l => l.phone)
-    addLog(`Enviando mensaje inicial a ${toMessage.length} leads con teléfono…`)
+    addLog(`Enviando mensaje inicial a ${toMessage.length} leads con teléfono (rotación de líneas activa)…`)
 
+    // Send in batches to stream progress to the log
+    const BATCH = 10
     let sent = 0, failed = 0
-    for (let i = 0; i < toMessage.length; i++) {
-      const lead = toMessage[i]
-      const text = (config.initial_message || '').replace('{nombre}', lead.name)
-      const res = await fetch('/api/messages', {
+
+    for (let offset = 0; offset < toMessage.length; offset += BATCH) {
+      const batch = toMessage.slice(offset, offset + BATCH)
+      const res = await fetch('/api/pipeline/send', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone: lead.phone, text, lead_id: lead.id }),
+        body: JSON.stringify({ leads: batch, message: config.initial_message || '' }),
       })
       const data = await res.json()
-      if (data.success) {
-        sent++
-        // Update lead: contactado, step=1, next_followup in 3 days
-        await supabase.from('leads').update({
-          status: 'contactado',
-          contact_step: 1,
-          last_contacted_at: new Date().toISOString(),
-          next_followup_at: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString(),
-        }).eq('id', lead.id)
+
+      if (!res.ok) {
+        addLog(`Error en lote ${Math.floor(offset / BATCH) + 1}: ${data.error || 'error desconocido'}`, 'error')
+        failed += batch.length
       } else {
-        failed++
-        addLog(`✗ ${lead.name}: ${data.error || 'error'}`, 'error')
+        for (const r of data.results || []) {
+          if (r.ok) {
+            sent++
+            const lineTag = r.lineLabel ? ` [${r.lineLabel}]` : ''
+            addLog(`OK ${r.name}${lineTag}`, 'success')
+          } else {
+            failed++
+            addLog(`Error ${r.name}: ${r.error || 'error'}`, 'error')
+          }
+        }
       }
-      setProgress(p => ({ ...p, msg: i + 1 }))
+
+      setProgress(p => ({ ...p, msg: Math.min(offset + BATCH, toMessage.length) }))
       setStats(s => ({ ...s, sent, failed }))
-      await new Promise(r => setTimeout(r, 800))
+
+      // Small delay between batches to avoid hammering
+      if (offset + BATCH < toMessage.length) {
+        await new Promise(r => setTimeout(r, 500))
+      }
     }
 
-    addLog(`✓ Pipeline completado — ${sent} mensajes enviados, ${failed} fallidos`, 'success')
+    addLog(`Pipeline completado — ${sent} mensajes enviados, ${failed} fallidos`, 'success')
     setPhase('done')
     setStep('')
     checkDueFollowups()

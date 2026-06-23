@@ -63,7 +63,7 @@ Si el cliente dice que sí, celebra y diles que los contactará el equipo pronto
   if (!aiReply || !lead?.phone) return Response.json({ reply: aiReply, sent: false })
 
   // Send via WhatsApp
-  const sendResult = await sendWhatsApp(lead.phone, aiReply)
+  const sendResult = await sendWhatsApp(lead.phone, aiReply, lead.assigned_line || undefined)
 
   // Save AI response
   await supabase.from('mensajes').insert({
