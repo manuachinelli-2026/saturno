@@ -1,64 +1,86 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Icon } from './Icons'
 
 const NAV = [
-  { href: '/',                label: 'Dashboard',      icon: 'dashboard' },
-  { href: '/pipeline',        label: 'Pipeline',        icon: 'pipeline' },
-  { href: '/scraper',         label: 'Scraper',         icon: 'scraper' },
-  { href: '/campaigns',       label: 'Campañas',        icon: 'campaigns' },
-  { href: '/conversations',   label: 'Conversaciones',  icon: 'conversations' },
-  { href: '/revenue',         label: 'Ingresos',        icon: 'revenue' },
-  { href: '/clients',         label: 'Clientes',        icon: 'clients' },
-  { href: '/lines',           label: 'Líneas',          icon: 'lines' },
-  { href: '/agent',           label: 'Agente',          icon: 'bot' },
+  { href: '/',              label: 'Control' },
+  { href: '/conversations', label: 'Conversaciones' },
+  { href: '/campaigns',     label: 'Campañas' },
+  { href: '/agent',         label: 'Agente' },
+  { href: '/lines',         label: 'Líneas' },
 ]
 
 export default function TopNav() {
   const pathname = usePathname()
+
   return (
     <nav style={{
       position: 'fixed', top: 0, left: 0, right: 0,
       height: 'var(--topnav-height)',
-      background: '#ffffff',
+      background: 'rgba(7, 7, 15, 0.92)',
+      backdropFilter: 'blur(16px)',
+      WebkitBackdropFilter: 'blur(16px)',
       borderBottom: '1px solid var(--border)',
       display: 'flex', alignItems: 'center',
-      padding: '0 16px', gap: '2px',
-      zIndex: 200, overflowX: 'auto',
+      padding: '0 20px', gap: '4px',
+      zIndex: 200,
     }}>
+
       {/* Logo */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: '8px',
-        marginRight: '20px', flexShrink: 0,
+        display: 'flex', alignItems: 'center', gap: '9px',
+        marginRight: '32px', flexShrink: 0,
       }}>
-        <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
-          <circle cx="14" cy="14" r="7" fill="var(--accent)" opacity="0.9"/>
-          <ellipse cx="14" cy="14" rx="13" ry="4.5" stroke="var(--accent)" strokeWidth="2" fill="none" transform="rotate(-20 14 14)" opacity="0.6"/>
+        <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+          <circle cx="11" cy="11" r="5.5" fill="#7c3aed"/>
+          <ellipse cx="11" cy="11" rx="10.5" ry="3.2"
+            stroke="#a06aff" strokeWidth="1.4" fill="none"
+            transform="rotate(-18 11 11)" opacity="0.65"/>
         </svg>
-        <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text)', letterSpacing: '-0.3px' }}>
+        <span style={{
+          fontWeight: 700, fontSize: '13px', letterSpacing: '0.12em',
+          color: 'var(--text)', fontFamily: 'Space Grotesk',
+          textTransform: 'uppercase', opacity: 0.9,
+        }}>
           Saturno
         </span>
       </div>
 
       {/* Nav items */}
-      {NAV.map(({ href, label, icon }) => {
+      {NAV.map(({ href, label }) => {
         const active = href === '/' ? pathname === '/' : pathname.startsWith(href)
         return (
           <Link key={href} href={href} style={{
-            display: 'flex', alignItems: 'center', gap: '6px',
-            padding: '6px 10px', borderRadius: '6px', fontSize: '13.5px',
-            fontWeight: active ? 600 : 400,
+            padding: '5px 13px',
+            borderRadius: '5px',
+            fontSize: '13px',
+            fontWeight: 500,
+            letterSpacing: '0.01em',
             color: active ? 'var(--text)' : 'var(--text-muted)',
-            background: active ? 'var(--surface)' : 'transparent',
-            textDecoration: 'none', transition: 'all .15s', flexShrink: 0,
+            background: active ? 'rgba(124,58,237,0.16)' : 'transparent',
+            border: active ? '1px solid rgba(124,58,237,0.32)' : '1px solid transparent',
+            textDecoration: 'none',
+            transition: 'all .12s',
+            flexShrink: 0,
             whiteSpace: 'nowrap',
           }}>
-            <Icon name={icon} size={14} color={active ? 'var(--accent)' : 'currentColor'} />
             {label}
           </Link>
         )
       })}
+
+      {/* Right: live indicator */}
+      <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <div style={{
+          width: '6px', height: '6px', borderRadius: '50%',
+          background: 'var(--green)',
+          boxShadow: '0 0 8px rgba(35,209,139,0.6)',
+          animation: 'pulse 2s ease-in-out infinite',
+        }} />
+        <span style={{ fontSize: '11px', color: 'var(--text-muted)', letterSpacing: '0.05em' }}>
+          LIVE
+        </span>
+      </div>
     </nav>
   )
 }

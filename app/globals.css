@@ -1,37 +1,45 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 
 :root {
-  /* PostHog-inspired: warm cream background + white cards */
-  --bg:           #faf8f5;
-  --surface:      #f3f0ec;
-  --panel:        #ffffff;
-  --panel-hover:  #fdfcfa;
-  --border:       #e8e3db;
-  --border-light: #f0ece6;
+  /* ── Background ──────────────────────────────── */
+  --bg:           #07070f;
+  --surface:      #0d0d1c;
+  --panel:        #111122;
+  --panel-hover:  #15152e;
 
-  --text:         #1c1917;
-  --text-muted:   #78716c;
-  --text-dim:     #a8a29e;
+  /* ── Borders ─────────────────────────────────── */
+  --border:       #1c1c32;
+  --border-bright: #2c2c4a;
 
+  /* ── Text ────────────────────────────────────── */
+  --text:         #ddddf4;
+  --text-muted:   #525278;
+  --text-dim:     #303050;
+
+  /* ── Accent (violet) ─────────────────────────── */
   --accent:       #7c3aed;
-  --accent-hover: #6d28d9;
-  --accent-dim:   rgba(124, 58, 237, 0.10);
+  --accent-bright: #a06aff;
+  --accent-hover: #8b4ffe;
+  --accent-dim:   rgba(124, 58, 237, 0.12);
 
-  --green:        #059669;
-  --green-dim:    rgba(5, 150, 105, 0.10);
-  --orange:       #d97706;
-  --orange-dim:   rgba(217, 119, 6, 0.10);
-  --red:          #dc2626;
-  --red-dim:      rgba(220, 38, 38, 0.10);
-  --blue:         #2563eb;
-  --blue-dim:     rgba(37, 99, 235, 0.10);
+  /* ── Semantic colors ─────────────────────────── */
+  --green:        #23d18b;
+  --green-dim:    rgba(35, 209, 139, 0.10);
+  --orange:       #f59e0b;
+  --orange-dim:   rgba(245, 158, 11, 0.10);
+  --red:          #f43f5e;
+  --red-dim:      rgba(244, 63, 94, 0.10);
+  --blue:         #60a5fa;
+  --blue-dim:     rgba(96, 165, 250, 0.10);
 
-  --shadow:       0 1px 3px rgba(0,0,0,.07), 0 1px 2px rgba(0,0,0,.04);
-  --shadow-md:    0 4px 8px rgba(0,0,0,.07), 0 2px 4px rgba(0,0,0,.04);
+  /* ── Shadow & elevation ──────────────────────── */
+  --shadow:       0 1px 4px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.03);
+  --shadow-md:    0 6px 20px rgba(0,0,0,.6);
 
-  --radius:       10px;
-  --radius-sm:    6px;
-  --topnav-height: 52px;
+  /* ── Shape ───────────────────────────────────── */
+  --radius:       8px;
+  --radius-sm:    5px;
+  --topnav-height: 48px;
 }
 
 *, *::before, *::after {
@@ -43,32 +51,45 @@
 html, body {
   height: 100%;
   background: var(--bg);
+  background-image: radial-gradient(rgba(255,255,255,0.04) 1px, transparent 1px);
+  background-size: 24px 24px;
+  background-attachment: fixed;
   color: var(--text);
-  font-family: 'Inter', system-ui, sans-serif;
-  font-size: 15px;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
 }
 
-input, textarea, select, button { font-family: inherit; font-size: inherit; }
-a { color: var(--accent); text-decoration: none; }
+input, textarea, select, button {
+  font-family: inherit;
+  font-size: inherit;
+}
 
-::-webkit-scrollbar { width: 5px; height: 5px; }
+a { color: var(--accent-bright); text-decoration: none; }
+
+::-webkit-scrollbar { width: 4px; height: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+::-webkit-scrollbar-thumb { background: var(--border-bright); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-dim); }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(5px); }
+  from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes pulse {
   0%, 100% { opacity: 1; }
-  50%       { opacity: 0.45; }
+  50%       { opacity: 0.35; }
 }
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+@keyframes glow-pulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(124,58,237,.25); }
+  50%       { box-shadow: 0 0 22px rgba(124,58,237,.55); }
+}
 
-.animate-in { animation: fadeIn 0.22s ease; }
-.pulse      { animation: pulse 1.6s infinite; }
+.animate-in { animation: fadeIn 0.2s ease; }
+.pulse      { animation: pulse 1.8s ease-in-out infinite; }
 .spin       { animation: spin 1s linear infinite; }
+.glow       { animation: glow-pulse 2s ease-in-out infinite; }

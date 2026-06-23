@@ -263,7 +263,13 @@ export default function AgentePage() {
       const res = await fetch('/api/agent', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ lead_id: null, incoming_message: text }),
+        body: JSON.stringify({
+          lead_id: null,
+          incoming_message: text,
+          override_prompt: form?.agent_prompt || undefined,
+          override_product: form?.product_name || undefined,
+          override_price: form?.price_offered || undefined,
+        }),
       })
       const data = await res.json()
       if (data.reply) {
@@ -706,7 +712,7 @@ export default function AgentePage() {
           </div>
 
           <div style={{ fontSize: '11px', color: 'var(--text-dim)', marginTop: '8px' }}>
-            Pulsa Enter para enviar. Las pruebas usan lead_id nulo y el prompt actual guardado.
+            Pulsa Enter para enviar. Usa el prompt del formulario actual (no necesitas guardar primero).
           </div>
         </div>
       </div>

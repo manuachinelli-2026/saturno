@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase'
 import { sendWhatsApp } from '@/lib/evolution'
 
 export async function POST(req) {
-  const { lead_id, campana_id, incoming_message } = await req.json()
+  const { lead_id, campana_id, incoming_message, override_prompt, override_product, override_price } = await req.json()
   if (!incoming_message) return Response.json({ error: 'No message' }, { status: 400 })
 
   const supabase = createServiceClient()
@@ -25,8 +25,11 @@ export async function POST(req) {
   const productLabel = PRODUCT_LABELS[campaign?.product_offered] || 'nuestros servicios de IA'
   const price = campaign?.price_offered ? '€' + campaign.price_offered : 'un precio muy accesible'
 
-  const systemPrompt = campaign?.agent_prompt || `
-Eres un agente de ventas de Pepino AI. Tu objetivo es vender ${productLabel} a ${lead?.name || 'este negocio'} por ${price}.
+  const productName = override_product || campaign?.product_offered || productLabel
+  const priceStr = override_price ? `€${override_price}` : price
+
+  const systemPrompt = override_prompt || campaign?.agent_prompt || `
+Eres un agente de ventas de Pepino AI. Tu objetivo es vender ${productName} a ${lead?.name || 'este negocio'} por ${priceStr}.
 Sé amigable, natural y conciso. Responde en el idioma del cliente.
 No seas insistente. Si preguntan el precio, dilo claramente.
 Si el cliente dice que sí, celebra y diles que los contactará el equipo pronto.

@@ -1,405 +1,437 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
-import MetricCard from '@/components/MetricCard'
-import { Icon } from '@/components/Icons'
+import { useEffect, useState, useRef } from 'react'
+import Link from 'next/link'
 
-const STATUS_META = {
-  nuevo:      { color: 'var(--blue)',   bg: 'var(--blue-dim)',   label: 'Nuevo' },
-  contactado: { color: 'var(--orange)', bg: 'var(--orange-dim)', label: 'Contactado' },
-  respondido: { color: 'var(--accent)', bg: 'var(--accent-dim)', label: 'Respondido' },
-  convertido: { color: 'var(--green)',  bg: 'var(--green-dim)',  label: 'Convertido' },
-  rechazado:  { color: 'var(--red)',    bg: 'var(--red-dim)',    label: 'Rechazado' },
-  pendiente:  { color: 'var(--text-muted)', bg: 'var(--surface)', label: 'Pendiente' },
-}
+const MONO = { fontFamily: "'JetBrains Mono', monospace" }
 
-function fmtMoney(n) {
-  return '€' + Number(n).toLocaleString('es-ES', { minimumFractionDigits: 0 })
-}
-
-function fmtDate(iso) {
-  if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short', year: 'numeric' })
-}
-
-function todayLabel() {
-  return new Date().toLocaleDateString('es-ES', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-}
-
-// Plain-div bar chart — no recharts
-function StatusBarChart({ statusCounts }) {
-  const entries = Object.entries(statusCounts || {}).sort((a, b) => b[1] - a[1])
-  if (entries.length === 0) return (
-    <div style={{ color: 'var(--text-dim)', fontSize: '14px', textAlign: 'center', padding: '40px 0' }}>
-      Sin datos todavía
-    </div>
-  )
-  const max = Math.max(...entries.map(([, v]) => v), 1)
-
+function Num({ v, prefix = '', suffix = '' }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-      {entries.map(([status, count]) => {
-        const meta = STATUS_META[status] || { color: 'var(--accent)', bg: 'var(--accent-dim)', label: status }
-        const pct = Math.max(4, (count / max) * 100)
-        return (
-          <div key={status} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <div style={{ width: '86px', flexShrink: 0, fontSize: '12px', fontWeight: 500, color: 'var(--text-muted)', textAlign: 'right' }}>
-              {meta.label}
-            </div>
-            <div style={{ flex: 1, background: 'var(--surface)', borderRadius: '100px', height: '10px', overflow: 'hidden' }}>
-              <div style={{
-                width: pct + '%',
-                height: '100%',
-                background: meta.color,
-                borderRadius: '100px',
-                transition: 'width .5s ease',
-              }} />
-            </div>
-            <div style={{ width: '32px', flexShrink: 0, fontSize: '12px', fontWeight: 600, color: 'var(--text)', textAlign: 'right' }}>
-              {count}
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-// WhatsApp line status indicator
-function LineStatusBadge({ connected }) {
-  return (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: '5px',
-      fontSize: '12px', fontWeight: 500, padding: '3px 9px',
-      borderRadius: '100px',
-      background: connected ? 'var(--green-dim)' : 'var(--red-dim)',
-      color: connected ? 'var(--green)' : 'var(--red)',
-    }}>
-      <span style={{
-        width: '6px', height: '6px', borderRadius: '50%',
-        background: connected ? 'var(--green)' : 'var(--red)',
-        display: 'inline-block',
-        boxShadow: connected ? '0 0 0 2px rgba(5,150,105,.25)' : 'none',
-      }} />
-      {connected ? 'Conectada' : 'Desconectada'}
+    <span style={{ ...MONO, fontSize: '28px', fontWeight: 500, letterSpacing: '-0.02em', color: 'var(--text)' }}>
+      {prefix}{v ?? '—'}{suffix}
     </span>
   )
 }
 
-// Skeleton shimmer for loading state
-function Skeleton({ width = '100%', height = '20px', radius = '6px' }) {
+function Tile({ label, value, prefix, suffix, accent, delta }) {
   return (
     <div style={{
-      width, height, borderRadius: radius,
-      background: 'linear-gradient(90deg, var(--surface) 25%, var(--border-light) 50%, var(--surface) 75%)',
-      backgroundSize: '200% 100%',
-      animation: 'shimmer 1.4s infinite',
+      background: 'var(--panel)',
+      border: `1px solid ${accent ? 'rgba(124,58,237,0.3)' : 'var(--border)'}`,
+      borderRadius: 'var(--radius)',
+      padding: '16px 18px',
+      display: 'flex', flexDirection: 'column', gap: '6px',
+      boxShadow: accent ? '0 0 20px rgba(124,58,237,0.08)' : 'var(--shadow)',
+    }}>
+      <span style={{ fontSize: '11px', fontWeight: 500, color: 'var(--text-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        {label}
+      </span>
+      <Num v={value} prefix={prefix} suffix={suffix} />
+      {delta && (
+        <span style={{ ...MONO, fontSize: '11px', color: 'var(--green)' }}>{delta}</span>
+      )}
+    </div>
+  )
+}
+
+function SectionTitle({ children }) {
+  return (
+    <div style={{
+      fontSize: '10px', fontWeight: 600, color: 'var(--text-muted)',
+      letterSpacing: '0.12em', textTransform: 'uppercase',
+      marginBottom: '10px', paddingBottom: '8px',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function StatusDot({ ok, pulse }) {
+  return (
+    <span style={{
+      width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0,
+      background: ok ? 'var(--green)' : 'var(--red)',
+      boxShadow: ok ? '0 0 7px rgba(35,209,139,0.7)' : 'none',
+      display: 'inline-block',
+      animation: ok && pulse ? 'pulse 2s ease-in-out infinite' : 'none',
     }} />
   )
 }
 
-export default function Dashboard() {
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState(null)
-  const [lastUpdated, setLastUpdated] = useState(null)
-  const [refreshing, setRefreshing] = useState(false)
+function timeAgo(iso) {
+  if (!iso) return ''
+  const diff = Math.floor((Date.now() - new Date(iso)) / 1000)
+  if (diff < 60) return `hace ${diff}s`
+  if (diff < 3600) return `hace ${Math.floor(diff / 60)}m`
+  if (diff < 86400) return `hace ${Math.floor(diff / 3600)}h`
+  return new Date(iso).toLocaleDateString('es-ES', { day: '2-digit', month: 'short' })
+}
 
-  const load = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true)
-    else setRefreshing(true)
-    setError(null)
-    try {
-      const res = await fetch('/api/dashboard-stats')
-      if (!res.ok) throw new Error('Error ' + res.status)
-      const json = await res.json()
-      setData(json)
-      setLastUpdated(new Date())
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-      setRefreshing(false)
-    }
-  }, [])
+// ─── Pipeline Launcher widget ────────────────────────────────────────────────
+function Launcher({ onLaunch }) {
+  const [industry, setIndustry] = useState('')
+  const [city, setCity]         = useState('')
+  const [count, setCount]       = useState(20)
+  const [running, setRunning]   = useState(false)
+  const [log, setLog]           = useState([])
+  const logRef                  = useRef(null)
 
   useEffect(() => {
-    load()
-    const interval = setInterval(() => load(true), 30000)
-    return () => clearInterval(interval)
-  }, [load])
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+  }, [log])
 
-  const v = (val, suffix = '') => loading ? <Skeleton width="60px" height="28px" radius="4px" /> : (val ?? '—') + suffix
+  async function launch() {
+    if (!industry || !city || running) return
+    setRunning(true)
+    setLog([`[${new Date().toLocaleTimeString()}] Iniciando pipeline...`])
+
+    try {
+      const res = await fetch('/api/pipeline/launch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ industry, city, count: parseInt(count) }),
+      })
+      const d = await res.json()
+      if (d.success) {
+        setLog(p => [...p,
+          `[${new Date().toLocaleTimeString()}] Job ID: ${d.jobId}`,
+          `[${new Date().toLocaleTimeString()}] Scraping en proceso...`,
+          `[${new Date().toLocaleTimeString()}] Los mensajes se envian al finalizar`,
+        ])
+        if (onLaunch) onLaunch()
+      } else {
+        setLog(p => [...p, `[ERROR] ${d.error || 'Error desconocido'}`])
+      }
+    } catch (e) {
+      setLog(p => [...p, `[ERROR] ${e.message}`])
+    }
+    setRunning(false)
+  }
+
+  const inp = {
+    background: 'var(--surface)',
+    border: '1px solid var(--border)',
+    borderRadius: 'var(--radius-sm)',
+    color: 'var(--text)',
+    padding: '8px 12px',
+    fontSize: '13px',
+    outline: 'none',
+    width: '100%',
+  }
 
   return (
-    <>
-      <style>{`
-        @keyframes shimmer {
-          0%   { background-position: 200% 0; }
-          100% { background-position: -200% 0; }
-        }
-      `}</style>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <SectionTitle>Lanzar pipeline</SectionTitle>
 
-      <div style={{ padding: '28px 32px', maxWidth: '1400px' }}>
-
-        {/* Header */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '28px' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '10px' }}>
+        <div>
+          <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.04em' }}>INDUSTRIA</div>
+          <input value={industry} onChange={e => setIndustry(e.target.value)}
+            placeholder="peluquerías, clínicas, restaurantes..."
+            style={inp} />
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px', gap: '8px' }}>
           <div>
-            <h1 style={{ fontSize: '26px', fontWeight: 700, color: 'var(--text)', margin: 0, letterSpacing: '-0.4px' }}>
-              Dashboard
-            </h1>
-            <p style={{ fontSize: '13.5px', color: 'var(--text-muted)', marginTop: '4px', textTransform: 'capitalize' }}>
-              {todayLabel()}
-            </p>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.04em' }}>CIUDAD</div>
+            <input value={city} onChange={e => setCity(e.target.value)}
+              placeholder="Madrid" style={inp} />
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {lastUpdated && (
-              <span style={{ fontSize: '12px', color: 'var(--text-dim)' }}>
-                Actualizado {lastUpdated.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' })}
-              </span>
-            )}
-            <button
-              onClick={() => load(true)}
-              disabled={refreshing}
-              style={{
-                display: 'flex', alignItems: 'center', gap: '6px',
-                padding: '7px 13px', borderRadius: '7px', fontSize: '13px', fontWeight: 500,
-                background: 'var(--panel)', border: '1px solid var(--border)',
-                color: 'var(--text-muted)', cursor: refreshing ? 'wait' : 'pointer',
-                boxShadow: 'var(--shadow)',
-              }}
-            >
-              <span className={refreshing ? 'spin' : ''} style={{ display: 'flex' }}>
-                <Icon name="refresh" size={13} />
-              </span>
-              Actualizar
-            </button>
+          <div>
+            <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '4px', letterSpacing: '0.04em' }}>CANTIDAD</div>
+            <input type="number" value={count} onChange={e => setCount(e.target.value)}
+              min={5} max={200} style={inp} />
           </div>
         </div>
+      </div>
 
-        {error && (
-          <div style={{
-            display: 'flex', alignItems: 'center', gap: '10px',
-            background: 'var(--red-dim)', border: '1px solid var(--red)',
-            borderRadius: 'var(--radius)', padding: '12px 16px',
-            color: 'var(--red)', fontSize: '14px', marginBottom: '24px',
+      <button onClick={launch} disabled={!industry || !city || running}
+        style={{
+          width: '100%', padding: '10px',
+          background: running || !industry || !city ? 'var(--surface)' : 'var(--accent)',
+          border: '1px solid',
+          borderColor: running || !industry || !city ? 'var(--border)' : 'rgba(124,58,237,0.5)',
+          borderRadius: 'var(--radius-sm)',
+          color: running || !industry || !city ? 'var(--text-muted)' : '#fff',
+          cursor: running || !industry || !city ? 'not-allowed' : 'pointer',
+          fontWeight: 600, fontSize: '13px', letterSpacing: '0.05em',
+          transition: 'all .15s',
+          boxShadow: !running && industry && city ? '0 0 16px rgba(124,58,237,0.3)' : 'none',
+          marginBottom: '10px',
+        }}>
+        {running ? 'LANZANDO...' : 'LANZAR PIPELINE'}
+      </button>
+
+      {/* Log */}
+      <div ref={logRef} style={{
+        flex: 1,
+        background: 'var(--surface)',
+        border: '1px solid var(--border)',
+        borderRadius: 'var(--radius-sm)',
+        padding: '10px 12px',
+        overflowY: 'auto',
+        minHeight: 0,
+      }}>
+        {log.length === 0 ? (
+          <div style={{ ...MONO, fontSize: '12px', color: 'var(--text-dim)' }}>
+            _ esperando instrucciones
+          </div>
+        ) : log.map((line, i) => (
+          <div key={i} style={{ ...MONO, fontSize: '11px', color: line.startsWith('[ERROR]') ? 'var(--red)' : 'var(--green)', marginBottom: '3px', lineHeight: 1.4 }}>
+            {line}
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Activity Feed ────────────────────────────────────────────────────────────
+function ActivityFeed({ feed, loading }) {
+  const ICONS = {
+    entrante: '←',
+    saliente: '→',
+    conversion: '★',
+  }
+  const COLORS = {
+    entrante: 'var(--blue)',
+    saliente: 'var(--text-muted)',
+    conversion: 'var(--green)',
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <SectionTitle>Actividad en vivo</SectionTitle>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '3px' }}>
+        {loading && (
+          <div style={{ ...MONO, fontSize: '12px', color: 'var(--text-dim)', padding: '8px 0' }}>cargando...</div>
+        )}
+        {!loading && feed.length === 0 && (
+          <div style={{ ...MONO, fontSize: '12px', color: 'var(--text-dim)', padding: '8px 0' }}>sin actividad reciente</div>
+        )}
+        {feed.map((item, i) => (
+          <div key={i} style={{
+            display: 'flex', alignItems: 'flex-start', gap: '8px',
+            padding: '7px 10px', borderRadius: '5px',
+            background: i === 0 ? 'rgba(124,58,237,0.05)' : 'transparent',
+            border: i === 0 ? '1px solid rgba(124,58,237,0.1)' : '1px solid transparent',
+            transition: 'background .1s',
           }}>
-            <Icon name="alert" size={16} color="var(--red)" />
-            No se pudieron cargar los datos: {error}
+            <span style={{ ...MONO, fontSize: '13px', color: COLORS[item.direction] || 'var(--text-muted)', flexShrink: 0, marginTop: '1px' }}>
+              {ICONS[item.direction] || '·'}
+            </span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '12px', color: 'var(--text)', fontWeight: 500, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {item.lead_name || item.phone}
+              </div>
+              <div style={{ fontSize: '11px', color: 'var(--text-muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '1px' }}>
+                {item.content}
+              </div>
+            </div>
+            <span style={{ ...MONO, fontSize: '10px', color: 'var(--text-dim)', flexShrink: 0 }}>
+              {timeAgo(item.created_at)}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ─── Lines Status ─────────────────────────────────────────────────────────────
+function LinesPanel({ lines, loading }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', overflow: 'hidden' }}>
+      <SectionTitle>Líneas WhatsApp</SectionTitle>
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+        {loading && <div style={{ ...MONO, fontSize: '12px', color: 'var(--text-dim)' }}>cargando...</div>}
+        {!loading && lines.length === 0 && (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)' }}>
+            Sin líneas configuradas.{' '}
+            <Link href="/lines" style={{ color: 'var(--accent-bright)' }}>Agregar</Link>
           </div>
         )}
+        {lines.map((line, i) => {
+          const connected = line.live_status === 'connected'
+          const pct = Math.min(100, ((line.daily_sent || 0) / (line.daily_limit || 80)) * 100)
+          return (
+            <div key={i} style={{
+              background: 'var(--surface)',
+              border: '1px solid var(--border)',
+              borderRadius: 'var(--radius-sm)',
+              padding: '12px 14px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <StatusDot ok={connected} pulse={connected} />
+                  <span style={{ fontSize: '13px', fontWeight: 600 }}>{line.label}</span>
+                </div>
+                <span style={{
+                  ...MONO, fontSize: '10px',
+                  color: connected ? 'var(--green)' : 'var(--red)',
+                  letterSpacing: '0.06em',
+                }}>
+                  {connected ? 'ONLINE' : 'OFFLINE'}
+                </span>
+              </div>
+              {/* Usage bar */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ flex: 1, height: '3px', background: 'var(--border)', borderRadius: '2px', overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: pct > 80 ? 'var(--orange)' : 'var(--accent)', borderRadius: '2px', transition: 'width .4s' }} />
+                </div>
+                <span style={{ ...MONO, fontSize: '10px', color: 'var(--text-muted)', flexShrink: 0 }}>
+                  {line.daily_sent || 0}/{line.daily_limit || 80}
+                </span>
+              </div>
+            </div>
+          )
+        })}
+      </div>
 
-        {/* Metric cards — 4 per row */}
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(4, 1fr)',
-          gap: '14px',
-          marginBottom: '24px',
+      {/* Pending followups */}
+      <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid var(--border)' }}>
+        <div style={{ fontSize: '11px', color: 'var(--text-muted)', marginBottom: '8px', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+          Follow-ups pendientes
+        </div>
+        <Link href="/agent" style={{
+          display: 'block', textAlign: 'center',
+          padding: '8px',
+          background: 'var(--surface)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius-sm)',
+          fontSize: '12px', color: 'var(--text-muted)',
+          fontWeight: 500,
         }}>
-          <MetricCard
-            label="Total leads contactados"
-            value={loading ? '…' : data?.leadsContactados ?? 0}
-            color="orange"
-            icon={<Icon name="send" size={14} color="var(--orange)" />}
-            delta={loading ? null : `de ${data?.totalLeads ?? 0} leads totales`}
-          />
-          <MetricCard
-            label="Respuestas recibidas"
-            value={loading ? '…' : data?.leadsRespondieron ?? 0}
-            color="blue"
-            icon={<Icon name="conversations" size={14} color="var(--blue)" />}
-            delta={loading ? null : `Tasa ${data?.tasaRespuesta ?? 0}%`}
-          />
-          <MetricCard
-            label="Conversiones este mes"
-            value={loading ? '…' : data?.conversionesMes ?? 0}
-            color="green"
-            icon={<Icon name="check" size={14} color="var(--green)" />}
-          />
-          <MetricCard
-            label="Ingresos este mes"
-            value={loading ? '…' : fmtMoney(data?.ingresosMes ?? 0)}
-            color="green"
-            icon={<Icon name="revenue" size={14} color="var(--green)" />}
-          />
-          <MetricCard
-            label="Tasa de respuesta"
-            value={loading ? '…' : (data?.tasaRespuesta ?? 0) + '%'}
-            color="blue"
-            icon={<Icon name="trending" size={14} color="var(--blue)" />}
-          />
-          <MetricCard
-            label="Tasa de conversion"
-            value={loading ? '…' : (data?.tasaConversion ?? 0) + '%'}
-            color="accent"
-            icon={<Icon name="trending" size={14} color="var(--accent)" />}
-          />
-          <MetricCard
-            label="Mensajes enviados hoy"
-            value={loading ? '…' : data?.mensajesHoy ?? 0}
-            color="orange"
-            icon={<Icon name="send" size={14} color="var(--orange)" />}
-          />
-          <MetricCard
-            label="Follow-ups pendientes"
-            value={loading ? '…' : data?.followupsPendientes ?? 0}
-            color={!loading && (data?.followupsPendientes ?? 0) > 0 ? 'red' : 'accent'}
-            icon={<Icon name="alert" size={14} color={!loading && (data?.followupsPendientes ?? 0) > 0 ? 'var(--red)' : 'var(--accent)'} />}
-            delta={!loading && (data?.followupsPendientes ?? 0) > 0 ? 'Requieren atencion' : null}
-          />
-        </div>
+          Ver en Agente →
+        </Link>
+      </div>
+    </div>
+  )
+}
 
-        {/* Middle row: bar chart + recent conversions */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.6fr', gap: '16px', marginBottom: '16px' }}>
+// ─── Main page ────────────────────────────────────────────────────────────────
+export default function ControlPage() {
+  const [stats, setStats]   = useState(null)
+  const [feed, setFeed]     = useState([])
+  const [lines, setLines]   = useState([])
+  const [loading, setLoading] = useState(true)
 
-          {/* Leads by status */}
-          <div style={{
+  async function loadAll() {
+    try {
+      const [statsRes, feedRes, linesRes] = await Promise.all([
+        fetch('/api/dashboard-stats'),
+        fetch('/api/activity'),
+        fetch('/api/lines'),
+      ])
+      const [s, f, l] = await Promise.all([
+        statsRes.json(),
+        feedRes.ok ? feedRes.json() : { items: [] },
+        linesRes.ok ? linesRes.json() : { lines: [] },
+      ])
+      setStats(s)
+      setFeed(f.items || [])
+      setLines(l.lines || [])
+    } catch {
+      // silently retry
+    }
+    setLoading(false)
+  }
+
+  useEffect(() => {
+    loadAll()
+    const id = setInterval(loadAll, 20_000)
+    return () => clearInterval(id)
+  }, [])
+
+  const TILES = [
+    { label: 'Total leads', value: stats?.totalLeads, accent: false },
+    { label: 'Contactados', value: stats?.leadsContactados, accent: false },
+    { label: 'Respondieron', value: stats?.leadsRespondieron, accent: false },
+    { label: 'Conversiones mes', value: stats?.conversionesMes, accent: true },
+    { label: 'Ingresos mes', value: stats?.ingresosMes != null ? `€${Math.round(stats.ingresosMes).toLocaleString('es')}` : '—', accent: false },
+  ]
+
+  return (
+    <div style={{
+      height: 'calc(100vh - var(--topnav-height))',
+      display: 'grid',
+      gridTemplateRows: 'auto 1fr',
+      gap: '12px',
+      padding: '14px 16px',
+      overflow: 'hidden',
+    }}>
+
+      {/* ── Metrics row ────────────────────────────────────────────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(5, 1fr)',
+        gap: '10px',
+      }}>
+        {TILES.map((t, i) => (
+          <div key={i} style={{
             background: 'var(--panel)',
-            border: '1px solid var(--border)',
+            border: `1px solid ${t.accent ? 'rgba(124,58,237,0.35)' : 'var(--border)'}`,
             borderRadius: 'var(--radius)',
-            padding: '24px',
-            boxShadow: 'var(--shadow)',
+            padding: '14px 16px',
+            boxShadow: t.accent ? '0 0 18px rgba(124,58,237,0.1)' : 'var(--shadow)',
           }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>Leads por estado</span>
-              <Icon name="pipeline" size={15} color="var(--text-dim)" />
+            <div style={{ fontSize: '10px', color: 'var(--text-muted)', letterSpacing: '0.10em', textTransform: 'uppercase', marginBottom: '8px', fontWeight: 600 }}>
+              {t.label}
             </div>
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                {[80, 65, 50, 35, 20].map((w, i) => (
-                  <Skeleton key={i} width="100%" height="10px" radius="100px" />
-                ))}
-              </div>
-            ) : (
-              <StatusBarChart statusCounts={data?.statusCounts} />
-            )}
-          </div>
-
-          {/* Last 5 conversions */}
-          <div style={{
-            background: 'var(--panel)',
-            border: '1px solid var(--border)',
-            borderRadius: 'var(--radius)',
-            padding: '24px',
-            boxShadow: 'var(--shadow)',
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-              <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>Ultimas conversiones</span>
-              <Icon name="revenue" size={15} color="var(--text-dim)" />
+            <div style={{ ...MONO, fontSize: '26px', fontWeight: 500, color: t.accent ? 'var(--accent-bright)' : 'var(--text)', letterSpacing: '-0.02em', lineHeight: 1 }}>
+              {loading ? '…' : t.value ?? '0'}
             </div>
-            {loading ? (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                {[1,2,3,4,5].map(i => <Skeleton key={i} width="100%" height="36px" />)}
-              </div>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: '320px' }}>
-                  <thead>
-                    <tr>
-                      {['Lead', 'Importe', 'Fecha'].map(h => (
-                        <th key={h} style={{
-                          textAlign: 'left', padding: '8px 14px',
-                          color: 'var(--text-muted)', fontSize: '11.5px',
-                          fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
-                          borderBottom: '1px solid var(--border)',
-                        }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data?.ultimasConversiones || []).length === 0 ? (
-                      <tr>
-                        <td colSpan={3} style={{ padding: '32px 14px', textAlign: 'center', color: 'var(--text-dim)', fontSize: '14px' }}>
-                          Sin conversiones este mes
-                        </td>
-                      </tr>
-                    ) : (data?.ultimasConversiones || []).map((c, i) => (
-                      <tr key={i} style={{ transition: 'background .12s' }}>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-light)', color: 'var(--text)', fontSize: '14px', fontWeight: 500 }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <span style={{
-                              width: '28px', height: '28px', borderRadius: '50%',
-                              background: 'var(--green-dim)', display: 'flex',
-                              alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-                            }}>
-                              <Icon name="user" size={12} color="var(--green)" />
-                            </span>
-                            {c.leads?.name || '—'}
-                          </div>
-                        </td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-light)', fontSize: '14px', fontWeight: 600, color: 'var(--green)' }}>
-                          {c.amount != null ? fmtMoney(c.amount) : '—'}
-                        </td>
-                        <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--border-light)', color: 'var(--text-muted)', fontSize: '13px' }}>
-                          {fmtDate(c.converted_at)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
           </div>
-        </div>
+        ))}
+      </div>
 
-        {/* WhatsApp lines status */}
+      {/* ── Bottom 3-column grid ────────────────────────────────────── */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '1fr 1.4fr 0.9fr',
+        gap: '12px',
+        minHeight: 0,
+      }}>
+
+        {/* Launcher */}
         <div style={{
           background: 'var(--panel)',
           border: '1px solid var(--border)',
           borderRadius: 'var(--radius)',
-          padding: '24px',
+          padding: '16px',
+          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
           boxShadow: 'var(--shadow)',
         }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-              <span style={{ fontSize: '15px', fontWeight: 600, color: 'var(--text)' }}>Lineas WhatsApp</span>
-              {!loading && data?.whatsappLines?.length > 0 && (
-                <span style={{
-                  fontSize: '12px', fontWeight: 600, padding: '2px 8px',
-                  borderRadius: '100px', background: 'var(--surface)', color: 'var(--text-muted)',
-                }}>
-                  {data.whatsappLines.filter(l => l.live_status === 'connected' || l.connected).length} / {data.whatsappLines.length} activas
-                </span>
-              )}
-            </div>
-            <Icon name="phone" size={15} color="var(--text-dim)" />
-          </div>
-          {loading ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
-              {[1,2,3].map(i => <Skeleton key={i} width="100%" height="64px" radius="var(--radius-sm)" />)}
-            </div>
-          ) : (data?.whatsappLines || []).length === 0 ? (
-            <div style={{ color: 'var(--text-dim)', fontSize: '14px', textAlign: 'center', padding: '32px 0' }}>
-              No hay lineas configuradas
-            </div>
-          ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '10px' }}>
-              {(data?.whatsappLines || []).map((line, i) => {
-                const connected = line.live_status === 'connected' || line.connected
-                return (
-                  <div key={i} style={{
-                    border: '1px solid var(--border)',
-                    borderRadius: 'var(--radius-sm)',
-                    padding: '14px 16px',
-                    background: 'var(--surface)',
-                    display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                  }}>
-                    <div>
-                      <div style={{ fontSize: '13.5px', fontWeight: 600, color: 'var(--text)', marginBottom: '4px' }}>
-                        {line.label || line.instance_name}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: 'var(--text-dim)', fontFamily: 'monospace' }}>
-                        {line.instance_name}
-                      </div>
-                    </div>
-                    <LineStatusBadge connected={connected} />
-                  </div>
-                )
-              })}
-            </div>
-          )}
+          <Launcher onLaunch={loadAll} />
+        </div>
+
+        {/* Activity feed */}
+        <div style={{
+          background: 'var(--panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '16px',
+          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: 'var(--shadow)',
+        }}>
+          <ActivityFeed feed={feed} loading={loading} />
+        </div>
+
+        {/* Lines */}
+        <div style={{
+          background: 'var(--panel)',
+          border: '1px solid var(--border)',
+          borderRadius: 'var(--radius)',
+          padding: '16px',
+          overflow: 'hidden',
+          display: 'flex', flexDirection: 'column',
+          boxShadow: 'var(--shadow)',
+        }}>
+          <LinesPanel lines={lines} loading={loading} />
         </div>
 
       </div>
-    </>
+    </div>
   )
 }
