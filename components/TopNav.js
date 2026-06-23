@@ -7,11 +7,11 @@ const NAV = [
   { href: '/',                label: 'Dashboard',      icon: 'dashboard' },
   { href: '/pipeline',        label: 'Pipeline',        icon: 'pipeline' },
   { href: '/scraper',         label: 'Scraper',         icon: 'scraper' },
-  { href: '/campaigns',       label: 'Campanas',        icon: 'campaigns' },
+  { href: '/campaigns',       label: 'Campañas',        icon: 'campaigns' },
   { href: '/conversations',   label: 'Conversaciones',  icon: 'conversations' },
   { href: '/revenue',         label: 'Ingresos',        icon: 'revenue' },
   { href: '/clients',         label: 'Clientes',        icon: 'clients' },
-  { href: '/lines',           label: 'Lineas',          icon: 'lines' },
+  { href: '/lines',           label: 'Líneas',          icon: 'lines' },
   { href: '/agent',           label: 'Agente',          icon: 'bot' },
 ]
 
