@@ -14,7 +14,8 @@ export default function ScraperPage() {
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0, name: '' })
   const [results, setResults] = useState([])
-  const [selected, setSelected] = useState(new Set())
+  const [savedLeads, setSavedLeads] = useState([])
+  const [autoSaved, setAutoSaved] = useState(0)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
   const esRef = useRef(null)
@@ -53,7 +54,46 @@ export default function ScraperPage() {
   async function loadResults(jobId) {
     const res = await fetch(`/api/stream/${jobId}?download=1`)
     const data = await res.json()
-    if (data.results) setResults(data.results)
+    if (data.results) {
+      setResults(data.results)
+      await autoSaveAll(data.results)
+    }
+  }
+
+  async function autoSaveAll(items) {
+    setSaving(true)
+    const rows = items
+      .filter(r => r.name || r.Name)
+      .map(r => ({
+        name: r.name || r.Name || '',
+        phone: (r.phone_number || r.phone || '').replace(/\D/g, ''),
+        address: r.address || '',
+        website: r.website || '',
+        industry: search,
+        city,
+        reviews_count: parseInt(r.reviews_count) || 0,
+        reviews_average: parseFloat(r.reviews_average) || 0,
+        opens_at: r.opens_at || '',
+        introduction: r.introduction || '',
+        status: 'nuevo',
+      }))
+    if (!rows.length) { setSaving(false); return }
+    const { error } = await supabase.from('leads').insert(rows)
+    setSaving(false)
+    if (!error) {
+      setAutoSaved(rows.length)
+      setSaveMsg(`✓ ${rows.length} leads guardados automáticamente`)
+      loadSavedLeads()
+    } else {
+      setSaveMsg('Error al guardar: ' + error.message)
+    }
+  }
+
+  async function loadSavedLeads() {
+    const { data } = await supabase
+      .from('leads').select('*').eq('industry', search).eq('city', city)
+      .order('created_at', { ascending: false }).limit(100)
+    setSavedLeads(data || [])
   }
 
   function stop() { esRef.current?.close(); setRunning(false) }
