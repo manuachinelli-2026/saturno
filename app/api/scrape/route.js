@@ -1,12 +1,6 @@
-const SCRAPER_URL = process.env.SCRAPER_API_URL || ''
+const SCRAPER_URL = process.env.SCRAPER_API_URL || 'https://gmaps-scraper-web-production.up.railway.app'
 
 export async function POST(req) {
-  if (!SCRAPER_URL) {
-    return Response.json({
-      error: 'El servicio de scraping no está configurado. Desplegá el backend en Railway y agregá SCRAPER_API_URL en las variables de entorno de Vercel.',
-    }, { status: 503 })
-  }
-
   const body = await req.json()
   try {
     const res = await fetch(`${SCRAPER_URL}/api/scrape`, {
