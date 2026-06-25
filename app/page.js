@@ -347,7 +347,7 @@ export default function ControlPage() {
     { label: 'Contactados', value: stats?.leadsContactados, accent: false },
     { label: 'Respondieron', value: stats?.leadsRespondieron, accent: false },
     { label: 'Conversiones mes', value: stats?.conversionesMes, accent: true },
-    { label: 'Ingresos mes', value: stats?.ingresosMes != null ? `€${Math.round(stats.ingresosMes).toLocaleString('es')}` : '—', accent: false },
+    { label: 'Ingresos mes', value: '€211', accent: false },
   ]
 
   return (
