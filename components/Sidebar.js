@@ -22,6 +22,7 @@ const NAV = [
   { href: '/campaigns',      label: 'Campañas',         icon: '📢' },
   { href: '/conversations',  label: 'Conversaciones',   icon: '💬' },
   { href: '/revenue',        label: 'Ingresos',         icon: '💰' },
+  { href: '/workflow',       label: 'Workflow',         icon: '⚡' },
 ]
 
 const BOTTOM_NAV = [
