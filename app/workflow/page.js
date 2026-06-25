@@ -1,409 +1,347 @@
 'use client'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 
-const MONO = { fontFamily: "'JetBrains Mono', monospace" }
-const NODE_W = 215
-const NODE_H = 92
-const PORT_R = 7
-const INNER_PAD = 40
+const NW = 200
+const NH = 78
+const PORT = 7
 
-const INITIAL_NODES = [
-  {
-    id: 'trigger',
-    label: 'Pipeline Trigger',
-    sublabel: 'Manual / Cron',
-    icon: '▶',
-    color: '#22c55e',
-    border: 'rgba(34,197,94,0.55)',
-    glow: 'rgba(34,197,94,0.13)',
-    x: 60,
-    y: 260,
-    status: 'idle',
-    stat: '47 ejecuciones totales',
-  },
-  {
-    id: 'scraper',
-    label: 'Agente Scraper',
-    sublabel: 'Google Maps → Leads',
-    icon: '🔍',
-    color: '#a78bfa',
-    border: 'rgba(167,139,250,0.6)',
-    glow: 'rgba(124,58,237,0.14)',
-    x: 370,
-    y: 70,
-    status: 'active',
-    stat: '1.2k leads · 25/min',
-  },
-  {
-    id: 'contact',
-    label: 'Agente Contacto',
-    sublabel: 'WhatsApp Outreach',
-    icon: '💬',
-    color: '#38bdf8',
-    border: 'rgba(56,189,248,0.55)',
-    glow: 'rgba(14,165,233,0.13)',
-    x: 370,
-    y: 260,
-    status: 'active',
-    stat: '847 msgs · 3 líneas',
-  },
-  {
-    id: 'webpages',
-    label: 'Agente Web',
-    sublabel: 'Crea landing pages',
-    icon: '🌐',
-    color: '#fbbf24',
-    border: 'rgba(251,191,36,0.55)',
-    glow: 'rgba(245,158,11,0.13)',
-    x: 370,
-    y: 450,
-    status: 'active',
-    stat: '12 páginas · Vercel',
-  },
-  {
-    id: 'output',
-    label: 'Conversiones',
-    sublabel: 'CRM · Revenue',
-    icon: '★',
-    color: '#34d399',
-    border: 'rgba(52,211,153,0.55)',
-    glow: 'rgba(16,185,129,0.13)',
-    x: 680,
-    y: 260,
-    status: 'active',
-    stat: '€211 · 2 deals cerrados',
-  },
+const TYPES = {
+  trigger: { color: '#60a5fa', bg: 'rgba(96,165,250,0.10)', tag: 'Trigger' },
+  action:  { color: '#a06aff', bg: 'rgba(124,58,237,0.10)', tag: 'Acción' },
+  delay:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', tag: 'Espera' },
+  ai:      { color: '#23d18b', bg: 'rgba(35,209,139,0.10)', tag: 'IA' },
+  end:     { color: '#f43f5e', bg: 'rgba(244,63,94,0.10)',  tag: 'Fin' },
+}
+
+let _id = 9
+const uid = () => String(_id++)
+
+const INIT_NODES = [
+  { id:'1', type:'trigger', icon:'📍', label:'Lead scrapeado',  x:60,  y:150 },
+  { id:'2', type:'action',  icon:'💬', label:'Mensaje inicial', x:330, y:150 },
+  { id:'3', type:'delay',   icon:'⏱',  label:'Esperar 3 días',  x:600, y:150 },
+  { id:'4', type:'action',  icon:'🔄', label:'Follow-up 1',     x:870, y:150 },
+  { id:'5', type:'delay',   icon:'⏱',  label:'Esperar 7 días',  x:1140, y:150 },
+  { id:'6', type:'action',  icon:'🔄', label:'Follow-up 2',     x:1410, y:150 },
+  { id:'7', type:'ai',      icon:'🤖', label:'Agente IA',       x:600, y:320 },
+  { id:'8', type:'end',     icon:'✅', label:'Conversión',      x:870, y:320 },
 ]
 
-const INITIAL_EDGES = [
-  { id: 'e1', from: 'trigger', to: 'scraper' },
-  { id: 'e2', from: 'trigger', to: 'contact' },
-  { id: 'e3', from: 'trigger', to: 'webpages' },
-  { id: 'e4', from: 'scraper', to: 'output' },
-  { id: 'e5', from: 'contact', to: 'output' },
-  { id: 'e6', from: 'webpages', to: 'output' },
+const INIT_EDGES = [
+  { id:'e1', s:'1', t:'2' },
+  { id:'e2', s:'2', t:'3' },
+  { id:'e3', s:'3', t:'4' },
+  { id:'e4', s:'4', t:'5' },
+  { id:'e5', s:'5', t:'6' },
+  { id:'e6', s:'2', t:'7' },
+  { id:'e7', s:'7', t:'8' },
 ]
-
-function outPort(node) {
-  return { x: node.x + NODE_W, y: node.y + NODE_H / 2 }
-}
-function inPort(node) {
-  return { x: node.x, y: node.y + NODE_H / 2 }
-}
-function curve(x1, y1, x2, y2) {
-  const d = Math.max(60, Math.abs(x2 - x1) * 0.5)
-  return `M ${x1} ${y1} C ${x1 + d} ${y1} ${x2 - d} ${y2} ${x2} ${y2}`
-}
 
 export default function WorkflowPage() {
-  const [nodes, setNodes] = useState(INITIAL_NODES)
-  const [edges, setEdges] = useState(INITIAL_EDGES)
-  const [dragging, setDragging] = useState(null)
-  const [conn, setConn] = useState(null)
-  const [selEdge, setSelEdge] = useState(null)
-  const canvasRef = useRef(null)
-  const edgeCtr = useRef(20)
+  const [nodes, setNodes] = useState(INIT_NODES)
+  const [edges, setEdges] = useState(INIT_EDGES)
+  const [hovEdge, setHovEdge] = useState(null)
+  const [connecting, setConnecting] = useState(null)
+  const [editId, setEditId] = useState(null)
+  const [editLabel, setEditLabel] = useState('')
+  const dragRef = useRef(null)
+  const hoverTimer = useRef(null)
 
-  const nodeMap = Object.fromEntries(nodes.map(n => [n.id, n]))
-
-  function innerXY(e) {
-    const r = canvasRef.current.getBoundingClientRect()
-    return {
-      x: e.clientX - r.left + canvasRef.current.scrollLeft - INNER_PAD,
-      y: e.clientY - r.top + canvasRef.current.scrollTop - INNER_PAD,
-    }
-  }
-
-  function onNodeDown(e, nodeId) {
-    if (e.button !== 0) return
-    e.preventDefault()
-    e.stopPropagation()
-    const { x, y } = innerXY(e)
-    const node = nodeMap[nodeId]
-    setDragging({ nodeId, ox: x - node.x, oy: y - node.y })
-    setSelEdge(null)
-  }
-
-  function onOutPortDown(e, nodeId) {
-    e.preventDefault()
-    e.stopPropagation()
-    const { x, y } = innerXY(e)
-    setConn({ fromId: nodeId, x, y })
-    setDragging(null)
-  }
-
-  function onInPortUp(e, nodeId) {
-    if (!conn || conn.fromId === nodeId) return
-    e.stopPropagation()
-    const exists = edges.some(ed => ed.from === conn.fromId && ed.to === nodeId)
-    if (!exists) {
-      edgeCtr.current++
-      setEdges(p => [...p, { id: `e${edgeCtr.current}`, from: conn.fromId, to: nodeId }])
-    }
-    setConn(null)
-  }
-
-  function onMouseMove(e) {
-    if (!dragging && !conn) return
-    const { x, y } = innerXY(e)
-    if (dragging) {
-      setNodes(p => p.map(n =>
-        n.id === dragging.nodeId ? { ...n, x: x - dragging.ox, y: y - dragging.oy } : n
+  useEffect(() => {
+    const onMove = (e) => {
+      if (!dragRef.current) return
+      const { id, sx, sy, ox, oy } = dragRef.current
+      setNodes(prev => prev.map(n =>
+        n.id === id ? { ...n, x: Math.max(0, ox + e.clientX - sx), y: Math.max(0, oy + e.clientY - sy) } : n
       ))
     }
-    if (conn) setConn(p => ({ ...p, x, y }))
+    const onUp = () => { dragRef.current = null }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [])
+
+  function startDrag(e, node) {
+    e.preventDefault()
+    e.stopPropagation()
+    if (connecting) { connectTo(node.id); return }
+    dragRef.current = { id: node.id, sx: e.clientX, sy: e.clientY, ox: node.x, oy: node.y }
   }
 
-  function onMouseUp() {
-    setDragging(null)
-    setConn(null)
+  function startConnect(e, fromId) {
+    e.preventDefault()
+    e.stopPropagation()
+    setConnecting(fromId)
   }
+
+  function connectTo(toId) {
+    if (!connecting || connecting === toId) { setConnecting(null); return }
+    const exists = edges.some(e => e.s === connecting && e.t === toId)
+    if (!exists) setEdges(prev => [...prev, { id: 'e' + uid(), s: connecting, t: toId }])
+    setConnecting(null)
+  }
+
+  function deleteEdge(id) {
+    setEdges(prev => prev.filter(e => e.id !== id))
+  }
+
+  function deleteNode(id) {
+    setNodes(prev => prev.filter(n => n.id !== id))
+    setEdges(prev => prev.filter(e => e.s !== id && e.t !== id))
+  }
+
+  function addNode() {
+    const maxX = nodes.length ? Math.max(...nodes.map(n => n.x)) : 0
+    const ref = nodes.find(n => n.x === maxX) || { x: 60, y: 150 }
+    setNodes(prev => [...prev, {
+      id: uid(), type: 'action', icon: '⚡', label: 'Nuevo paso',
+      x: ref.x + NW + 60, y: ref.y,
+    }])
+  }
+
+  function startEdit(e, node) {
+    e.stopPropagation()
+    setEditId(node.id)
+    setEditLabel(node.label)
+  }
+
+  function commitEdit() {
+    setNodes(prev => prev.map(n => n.id === editId ? { ...n, label: editLabel } : n))
+    setEditId(null)
+  }
+
+  function hoverEdge(id) {
+    clearTimeout(hoverTimer.current)
+    setHovEdge(id)
+  }
+
+  function unhoverEdge() {
+    hoverTimer.current = setTimeout(() => setHovEdge(null), 80)
+  }
+
+  const cW = nodes.length ? Math.max(...nodes.map(n => n.x + NW + 120), 900) : 900
+  const cH = nodes.length ? Math.max(...nodes.map(n => n.y + NH + 120), 500) : 500
 
   return (
     <div style={{
-      height: 'calc(100vh - var(--topnav-height))',
       display: 'flex', flexDirection: 'column',
-      overflow: 'hidden', userSelect: 'none',
+      height: 'calc(100vh - var(--topnav-height))',
+      padding: '20px', boxSizing: 'border-box', gap: '12px',
     }}>
-      <style>{`
-        @keyframes flowDash { to { stroke-dashoffset: -18; } }
-        @keyframes glow { 0%,100%{opacity:1} 50%{opacity:.5} }
-      `}</style>
 
-      {/* Toolbar */}
-      <div style={{
-        padding: '10px 20px',
-        borderBottom: '1px solid var(--border)',
-        background: 'var(--panel)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexShrink: 0,
-      }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexShrink: 0 }}>
         <div>
-          <span style={{ fontWeight: 700, fontSize: '15px', color: 'var(--text)', marginRight: '14px' }}>⚡ Workflow</span>
-          <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-            Arrastrá nodos · Puerto derecho <span style={{ color: '#7c3aed' }}>●</span> para conectar · Click en flecha para seleccionar
-          </span>
+          <h1 style={{ fontSize: '22px', fontWeight: 700, color: 'var(--text)', margin: 0 }}>Workflow</h1>
+          <p style={{ fontSize: '12px', color: 'var(--text-muted)', marginTop: '3px' }}>
+            Arrastrá nodos · hover en cable para eliminar · puerto derecho para conectar · doble clic para renombrar
+          </p>
         </div>
         <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-          <span style={{ ...MONO, fontSize: '10px', color: '#10b981', background: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.25)', borderRadius: '4px', padding: '3px 8px' }}>
-            ● ACTIVO
-          </span>
-          {selEdge && (
-            <button
-              onClick={() => { setEdges(p => p.filter(e => e.id !== selEdge)); setSelEdge(null) }}
-              style={{ ...MONO, fontSize: '10px', color: '#f87171', background: 'rgba(248,113,113,0.1)', border: '1px solid rgba(248,113,113,0.35)', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
-            >
-              ✕ Borrar conexión
-            </button>
+          {connecting && (
+            <div style={{
+              padding: '6px 12px', borderRadius: 'var(--radius-sm)',
+              background: 'var(--orange-dim)', border: '1px solid var(--orange)',
+              color: 'var(--orange)', fontSize: '12px', fontWeight: 600,
+            }}>
+              Clic en otro nodo para conectar — ESC para cancelar
+            </div>
           )}
           <button
-            onClick={() => { setNodes(INITIAL_NODES); setEdges(INITIAL_EDGES); setSelEdge(null) }}
-            style={{ ...MONO, fontSize: '10px', color: 'var(--text-muted)', background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: '4px', padding: '3px 10px', cursor: 'pointer' }}
-          >
-            ↺ Reset
-          </button>
+            onClick={() => { setNodes(INIT_NODES); setEdges(INIT_EDGES) }}
+            style={{
+              padding: '7px 14px', borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--border)', background: 'var(--surface)',
+              color: 'var(--text-muted)', fontSize: '12px', fontWeight: 500,
+            }}
+          >Resetear</button>
+          <button
+            onClick={addNode}
+            style={{
+              padding: '7px 14px', borderRadius: 'var(--radius-sm)',
+              border: '1px solid var(--accent)', background: 'var(--accent-dim)',
+              color: 'var(--accent-bright)', fontSize: '12px', fontWeight: 600,
+            }}
+          >+ Agregar nodo</button>
         </div>
       </div>
 
       {/* Canvas */}
       <div
-        ref={canvasRef}
-        onMouseMove={onMouseMove}
-        onMouseUp={onMouseUp}
-        onMouseLeave={onMouseUp}
-        onClick={() => setSelEdge(null)}
         style={{
-          flex: 1, overflow: 'auto', position: 'relative',
-          cursor: dragging ? 'grabbing' : conn ? 'crosshair' : 'default',
-          background: 'var(--bg)',
+          flex: 1, overflow: 'auto',
+          background: 'var(--surface)', borderRadius: 'var(--radius)',
+          border: '1px solid var(--border)', position: 'relative',
+          cursor: connecting ? 'crosshair' : 'default',
         }}
+        onClick={() => connecting && setConnecting(null)}
       >
-        {/* Dot grid */}
-        <svg style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', pointerEvents: 'none' }}>
-          <defs>
-            <pattern id="wf-grid" x="0" y="0" width="28" height="28" patternUnits="userSpaceOnUse">
-              <circle cx="1.5" cy="1.5" r="1.5" fill="var(--border)" opacity="0.4" />
-            </pattern>
-          </defs>
-          <rect width="100%" height="100%" fill="url(#wf-grid)" />
-        </svg>
+        <div style={{ position: 'relative', width: cW, height: cH }}>
 
-        {/* Inner workspace */}
-        <div style={{ position: 'relative', width: '980px', minHeight: '660px', margin: `${INNER_PAD}px` }}>
-
-          {/* Edges SVG */}
-          <svg style={{
-            position: 'absolute', inset: 0, width: '100%', height: '100%',
-            overflow: 'visible', pointerEvents: 'none',
-          }}>
+          {/* SVG edges */}
+          <svg style={{ position: 'absolute', inset: 0, width: cW, height: cH, pointerEvents: 'none', overflow: 'visible' }}>
             <defs>
-              <marker id="wf-arrow" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
-                <polygon points="0 0,9 3,0 6" fill="rgba(167,139,250,0.75)" />
+              <marker id="arr" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+                <path d="M0,1 L5,3.5 L0,6 Z" fill="#2c2c4a" />
               </marker>
-              <marker id="wf-arrow-sel" markerWidth="9" markerHeight="6" refX="8" refY="3" orient="auto">
-                <polygon points="0 0,9 3,0 6" fill="#f87171" />
+              <marker id="arr-h" markerWidth="7" markerHeight="7" refX="5" refY="3.5" orient="auto">
+                <path d="M0,1 L5,3.5 L0,6 Z" fill="#a06aff" />
               </marker>
             </defs>
 
             {edges.map(edge => {
-              const fn = nodeMap[edge.from]
-              const tn = nodeMap[edge.to]
-              if (!fn || !tn) return null
-              const p1 = outPort(fn)
-              const p2 = inPort(tn)
-              const sel = selEdge === edge.id
-              const d = curve(p1.x, p1.y, p2.x, p2.y)
+              const src = nodes.find(n => n.id === edge.s)
+              const tgt = nodes.find(n => n.id === edge.t)
+              if (!src || !tgt) return null
+              const sx = src.x + NW, sy = src.y + NH / 2
+              const tx = tgt.x,      ty = tgt.y + NH / 2
+              const cp = Math.max(50, Math.abs(tx - sx) * 0.42)
+              const d = `M${sx} ${sy} C${sx+cp} ${sy},${tx-cp} ${ty},${tx} ${ty}`
+              const mx = (sx + tx) / 2
+              const my = (sy + ty) / 2
+              const hov = hovEdge === edge.id
               return (
                 <g key={edge.id}>
-                  {/* Wide hit area */}
-                  <path d={d} fill="none" stroke="transparent" strokeWidth="14"
-                    style={{ cursor: 'pointer', pointerEvents: 'stroke' }}
-                    onClick={e => { e.stopPropagation(); setSelEdge(sel ? null : edge.id) }}
+                  {/* Fat invisible hit area */}
+                  <path
+                    d={d} stroke="transparent" strokeWidth={18} fill="none"
+                    style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
+                    onMouseEnter={() => hoverEdge(edge.id)}
+                    onMouseLeave={unhoverEdge}
                   />
-                  {/* Glow halo when selected */}
-                  {sel && (
-                    <path d={d} fill="none" stroke="rgba(248,113,113,0.18)" strokeWidth="10"
-                      style={{ pointerEvents: 'none' }} />
+                  {/* Visible cable */}
+                  <path
+                    d={d}
+                    stroke={hov ? '#a06aff' : '#1c1c32'}
+                    strokeWidth={hov ? 2 : 1.5}
+                    fill="none"
+                    markerEnd={hov ? 'url(#arr-h)' : 'url(#arr)'}
+                    style={{ pointerEvents: 'none', transition: 'stroke 0.12s, stroke-width 0.12s' }}
+                  />
+                  {/* Delete button at midpoint */}
+                  {hov && (
+                    <g
+                      transform={`translate(${mx},${my})`}
+                      style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                      onMouseEnter={() => hoverEdge(edge.id)}
+                      onMouseLeave={unhoverEdge}
+                      onClick={ev => { ev.stopPropagation(); deleteEdge(edge.id) }}
+                    >
+                      <circle r={9} fill="#0d0d1c" stroke="#f43f5e" strokeWidth={1.5} />
+                      <text x={0} y={4} textAnchor="middle" fontSize={13} fontWeight={700} fill="#f43f5e" style={{ userSelect: 'none' }}>×</text>
+                    </g>
                   )}
-                  {/* Main line */}
-                  <path d={d} fill="none"
-                    stroke={sel ? '#f87171' : 'rgba(167,139,250,0.6)'}
-                    strokeWidth={sel ? 2.5 : 1.8}
-                    strokeDasharray="6 3"
-                    markerEnd={sel ? 'url(#wf-arrow-sel)' : 'url(#wf-arrow)'}
-                    style={{
-                      pointerEvents: 'none',
-                      animation: sel ? 'none' : 'flowDash 0.7s linear infinite',
-                    }}
-                  />
                 </g>
               )
             })}
-
-            {/* Live connecting line */}
-            {conn && (() => {
-              const fn = nodeMap[conn.fromId]
-              if (!fn) return null
-              const p1 = outPort(fn)
-              return (
-                <path
-                  d={curve(p1.x, p1.y, conn.x, conn.y)}
-                  fill="none"
-                  stroke="rgba(167,139,250,0.85)"
-                  strokeWidth="1.8"
-                  strokeDasharray="5 4"
-                  style={{ pointerEvents: 'none', animation: 'flowDash 0.5s linear infinite' }}
-                />
-              )
-            })()}
           </svg>
 
           {/* Nodes */}
-          {nodes.map(node => (
-            <div key={node.id} style={{
-              position: 'absolute',
-              left: node.x, top: node.y,
-              width: NODE_W, height: NODE_H,
-              zIndex: dragging?.nodeId === node.id ? 30 : 10,
-            }}>
-              {/* Input port */}
+          {nodes.map(node => {
+            const T = TYPES[node.type] || TYPES.action
+            return (
               <div
-                onMouseUp={e => onInPortUp(e, node.id)}
+                key={node.id}
+                onMouseDown={e => startDrag(e, node)}
+                onDoubleClick={e => startEdit(e, node)}
                 style={{
-                  position: 'absolute',
-                  left: -PORT_R, top: '50%',
-                  width: PORT_R * 2, height: PORT_R * 2,
-                  borderRadius: '50%',
-                  background: conn ? 'rgba(167,139,250,0.7)' : 'var(--surface)',
-                  border: `2px solid ${node.border}`,
-                  cursor: conn ? 'copy' : 'default',
-                  transform: conn ? 'translateY(-50%) scale(1.45)' : 'translateY(-50%)',
-                  transition: 'transform .12s, background .12s',
-                  zIndex: 5, pointerEvents: 'auto',
-                }}
-              />
-
-              {/* Node card */}
-              <div
-                onMouseDown={e => onNodeDown(e, node.id)}
-                style={{
-                  width: '100%', height: '100%',
-                  background: 'var(--panel)',
-                  border: `1.5px solid ${node.border}`,
-                  borderRadius: '12px',
-                  padding: '13px 15px',
-                  display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
-                  cursor: dragging?.nodeId === node.id ? 'grabbing' : 'grab',
-                  boxShadow: `0 0 32px ${node.glow}, 0 4px 18px rgba(0,0,0,0.4)`,
+                  position: 'absolute', left: node.x, top: node.y,
+                  width: NW, height: NH,
+                  background: T.bg, border: `1.5px solid ${T.color}88`,
+                  borderRadius: 'var(--radius)', userSelect: 'none',
+                  cursor: connecting ? 'pointer' : 'grab',
+                  display: 'flex', flexDirection: 'column', justifyContent: 'center',
+                  padding: '10px 14px 10px 12px', boxSizing: 'border-box', zIndex: 10,
+                  boxShadow: connecting ? `0 0 0 1.5px ${T.color}` : 'none',
+                  transition: 'box-shadow 0.15s',
                 }}
               >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                  <div style={{
-                    width: '33px', height: '33px', borderRadius: '8px',
-                    background: node.glow,
-                    border: `1.5px solid ${node.border}`,
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    fontSize: '16px', flexShrink: 0,
-                  }}>
-                    {node.icon}
-                  </div>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text)', lineHeight: 1.25, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {node.label}
-                    </div>
-                    <div style={{ fontSize: '10px', color: 'var(--text-muted)', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                      {node.sublabel}
-                    </div>
-                  </div>
-                  <div style={{
-                    width: '7px', height: '7px', borderRadius: '50%',
-                    background: node.status === 'active' ? '#10b981' : '#6b7280',
-                    boxShadow: node.status === 'active' ? '0 0 8px rgba(16,185,129,0.9)' : 'none',
-                    animation: node.status === 'active' ? 'glow 2.5s ease-in-out infinite' : 'none',
-                    flexShrink: 0,
-                  }} />
+                {/* Type badge */}
+                <div style={{ fontSize: '9px', fontWeight: 700, color: T.color, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '5px' }}>
+                  {T.tag}
                 </div>
-                {node.stat && (
-                  <div style={{ ...MONO, fontSize: '10px', color: node.color, marginTop: '4px', letterSpacing: '0.02em' }}>
-                    {node.stat}
-                  </div>
-                )}
-              </div>
 
-              {/* Output port */}
-              <div
-                onMouseDown={e => onOutPortDown(e, node.id)}
-                title="Arrastrá para conectar"
-                style={{
-                  position: 'absolute',
-                  right: -PORT_R, top: '50%',
-                  transform: 'translateY(-50%)',
-                  width: PORT_R * 2, height: PORT_R * 2,
-                  borderRadius: '50%',
-                  background: 'var(--accent)',
-                  border: '2px solid rgba(167,139,250,0.9)',
-                  cursor: 'crosshair',
-                  boxShadow: '0 0 10px rgba(124,58,237,0.6)',
-                  zIndex: 5, pointerEvents: 'auto',
-                  animation: 'glow 2s ease-in-out infinite',
-                }}
-              />
-            </div>
-          ))}
+                {/* Label row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
+                  <span style={{ fontSize: '15px', flexShrink: 0 }}>{node.icon}</span>
+                  {editId === node.id ? (
+                    <input
+                      autoFocus
+                      value={editLabel}
+                      onChange={e => setEditLabel(e.target.value)}
+                      onBlur={commitEdit}
+                      onKeyDown={e => e.key === 'Enter' && commitEdit()}
+                      onClick={e => e.stopPropagation()}
+                      style={{
+                        flex: 1, background: 'transparent', border: 'none',
+                        borderBottom: '1px solid var(--accent)',
+                        color: 'var(--text)', fontSize: '13px', fontWeight: 600,
+                        outline: 'none', padding: '0 2px', minWidth: 0,
+                      }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {node.label}
+                    </span>
+                  )}
+                </div>
+
+                {/* Delete node button */}
+                <button
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); deleteNode(node.id) }}
+                  style={{
+                    position: 'absolute', top: 5, right: 6,
+                    width: 18, height: 18, border: 'none',
+                    background: 'transparent', color: 'var(--text-dim)',
+                    fontSize: '14px', cursor: 'pointer',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    borderRadius: 3, padding: 0, lineHeight: 1,
+                  }}
+                >×</button>
+
+                {/* Input port (left) */}
+                <div
+                  onMouseDown={e => e.stopPropagation()}
+                  onClick={e => { e.stopPropagation(); if (connecting) connectTo(node.id) }}
+                  style={{
+                    position: 'absolute', left: -(PORT), top: '50%', transform: 'translateY(-50%)',
+                    width: PORT * 2, height: PORT * 2, borderRadius: '50%',
+                    background: 'var(--surface)', border: `2px solid ${T.color}`,
+                    cursor: connecting ? 'pointer' : 'default', zIndex: 20,
+                  }}
+                />
+
+                {/* Output port (right) */}
+                <div
+                  onMouseDown={e => startConnect(e, node.id)}
+                  style={{
+                    position: 'absolute', right: -(PORT), top: '50%', transform: 'translateY(-50%)',
+                    width: PORT * 2, height: PORT * 2, borderRadius: '50%',
+                    background: T.color, border: '2px solid var(--surface)',
+                    cursor: 'crosshair', zIndex: 20,
+                  }}
+                />
+              </div>
+            )
+          })}
         </div>
       </div>
 
-      {/* Footer */}
-      <div style={{
-        padding: '7px 20px',
-        borderTop: '1px solid var(--border)',
-        background: 'var(--panel)',
-        display: 'flex', gap: '20px', alignItems: 'center',
-        flexShrink: 0, fontSize: '11px', color: 'var(--text-muted)',
-      }}>
-        <span>Puerto izq = entrada &nbsp;·&nbsp; <span style={{ color: '#7c3aed' }}>●</span> Puerto der = salida, arrastrá para conectar</span>
-        <span>Click en flecha para seleccionar · Toolbar → Borrar conexión</span>
-        <span>Botón ↺ Reset para volver al estado inicial</span>
+      {/* Legend */}
+      <div style={{ display: 'flex', gap: '14px', alignItems: 'center', flexShrink: 0, flexWrap: 'wrap' }}>
+        {Object.entries(TYPES).map(([, T]) => (
+          <div key={T.tag} style={{ display: 'flex', alignItems: 'center', gap: '5px', fontSize: '11px', color: 'var(--text-muted)' }}>
+            <div style={{ width: 7, height: 7, borderRadius: '50%', background: T.color }} />
+            {T.tag}
+          </div>
+        ))}
+        <div style={{ marginLeft: 'auto', fontSize: '11px', color: 'var(--text-dim)' }}>
+          Arrastrá · hover cable para borrar · puerto derecho (●) para conectar · doble clic para renombrar
+        </div>
       </div>
     </div>
   )
