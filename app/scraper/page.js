@@ -14,10 +14,10 @@ export default function ScraperPage() {
   const [running, setRunning] = useState(false)
   const [progress, setProgress] = useState({ current: 0, total: 0, name: '' })
   const [results, setResults] = useState([])
-  const [savedLeads, setSavedLeads] = useState([])
   const [autoSaved, setAutoSaved] = useState(0)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState('')
+  const [errorMsg, setErrorMsg] = useState('')
   const esRef = useRef(null)
 
   async function startScrape() {
@@ -26,6 +26,7 @@ export default function ScraperPage() {
     setResults([])
     setProgress({ current: 0, total, name: '' })
     setSaveMsg('')
+    setErrorMsg('')
 
     const res = await fetch('/api/scrape', {
       method: 'POST',
@@ -33,7 +34,11 @@ export default function ScraperPage() {
       body: JSON.stringify({ search: `${search} en ${city}`, total }),
     })
     const { job_id, error } = await res.json()
-    if (error || !job_id) { setRunning(false); alert(error || 'Error al iniciar'); return }
+    if (error || !job_id) {
+      setRunning(false)
+      setErrorMsg(error || 'No se pudo iniciar el scraper')
+      return
+    }
 
     const es = new EventSource(`/api/stream/${job_id}`)
     esRef.current = es
@@ -48,7 +53,7 @@ export default function ScraperPage() {
         loadResults(job_id)
       }
     }
-    es.onerror = () => { es.close(); setRunning(false) }
+    es.onerror = () => { es.close(); setRunning(false); setErrorMsg('La conexión con el scraper falló.') }
   }
 
   async function loadResults(jobId) {
@@ -82,57 +87,13 @@ export default function ScraperPage() {
     setSaving(false)
     if (!error) {
       setAutoSaved(rows.length)
-      setSaveMsg(`✓ ${rows.length} leads guardados automáticamente`)
-      loadSavedLeads()
+      setSaveMsg(`✓ ${rows.length} leads guardados en Leads`)
     } else {
       setSaveMsg('Error al guardar: ' + error.message)
     }
   }
 
-  async function loadSavedLeads() {
-    const { data } = await supabase
-      .from('leads').select('*').eq('industry', search).eq('city', city)
-      .order('created_at', { ascending: false }).limit(100)
-    setSavedLeads(data || [])
-  }
-
   function stop() { esRef.current?.close(); setRunning(false) }
-
-  function toggleSelect(i) {
-    setSelected(prev => {
-      const next = new Set(prev)
-      next.has(i) ? next.delete(i) : next.add(i)
-      return next
-    })
-  }
-
-  function selectAll() {
-    selected.size === results.length ? setSelected(new Set()) : setSelected(new Set(results.map((_, i) => i)))
-  }
-
-  async function saveLeads() {
-    const toSave = results.filter((_, i) => selected.has(i))
-    if (!toSave.length) return
-    setSaving(true)
-    const rows = toSave.map(r => ({
-      name: r.name || r.Name || '',
-      phone: r.phone_number || r.phone || '',
-      address: r.address || '',
-      website: r.website || '',
-      industry: search,
-      city,
-      reviews_count: parseInt(r.reviews_count) || 0,
-      reviews_average: parseFloat(r.reviews_average) || 0,
-      opens_at: r.opens_at || '',
-      introduction: r.introduction || '',
-      status: 'nuevo',
-    }))
-    const { error } = await supabase.from('leads').insert(rows)
-    setSaving(false)
-    if (error) { setSaveMsg('Error: ' + error.message); return }
-    setSaveMsg(`✓ ${rows.length} leads guardados`)
-    setSelected(new Set())
-  }
 
   const pct = progress.total > 0 ? Math.round(progress.current / progress.total * 100) : 0
 
@@ -187,6 +148,13 @@ export default function ScraperPage() {
           </div>
         </div>
 
+        {/* Error message */}
+        {errorMsg && (
+          <div style={{ marginTop: '16px', padding: '12px 16px', background: 'rgba(239,68,68,.1)', border: '1px solid rgba(239,68,68,.3)', borderRadius: 'var(--radius-sm)', color: '#f87171', fontSize: '13px' }}>
+            ⚠️ {errorMsg}
+          </div>
+        )}
+
         {/* Progress */}
         {running && (
           <div style={{ marginTop: '16px' }}>
@@ -209,20 +177,13 @@ export default function ScraperPage() {
               {results.length} resultados encontrados
             </div>
             <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              {saveMsg && <span style={{ fontSize: '13px', color: 'var(--green)' }}>{saveMsg}</span>}
-              <button onClick={selectAll} style={{ background: 'transparent', color: 'var(--text-muted)', padding: '8px 14px', borderRadius: 'var(--radius-sm)', border: '1px solid var(--border)', cursor: 'pointer', fontSize: '13px' }}>
-                {selected.size === results.length ? 'Deseleccionar todo' : 'Seleccionar todo'}
-              </button>
-              <button onClick={saveLeads} disabled={selected.size === 0 || saving} style={{ background: selected.size > 0 ? 'var(--accent)' : 'var(--border)', color: '#fff', padding: '8px 16px', borderRadius: 'var(--radius-sm)', border: 'none', cursor: selected.size > 0 ? 'pointer' : 'not-allowed', fontWeight: 600, fontSize: '13px' }}>
-                {saving ? 'Guardando…' : `Guardar ${selected.size || ''} leads`}
-              </button>
+              {saveMsg && <span style={{ fontSize: '13px', color: saving ? 'var(--text-muted)' : 'var(--green)' }}>{saving ? 'Guardando…' : saveMsg}</span>}
             </div>
           </div>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
               <thead>
                 <tr>
-                  <th style={{ width: '40px', padding: '10px 16px', borderBottom: '1px solid var(--border)' }}></th>
                   {['Nombre','Teléfono','Dirección','Rating','Horario'].map(h => (
                     <th key={h} style={{ textAlign: 'left', padding: '10px 16px', color: 'var(--text-muted)', fontSize: '12px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.05em', borderBottom: '1px solid var(--border)' }}>{h}</th>
                   ))}
@@ -230,10 +191,7 @@ export default function ScraperPage() {
               </thead>
               <tbody>
                 {results.map((r, i) => (
-                  <tr key={i} onClick={() => toggleSelect(i)} style={{ cursor: 'pointer', background: selected.has(i) ? 'var(--accent-dim)' : 'transparent' }}>
-                    <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
-                      <input type="checkbox" checked={selected.has(i)} onChange={() => toggleSelect(i)} style={{ accentColor: 'var(--accent)' }} />
-                    </td>
+                  <tr key={i}>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', color: 'var(--text)', fontSize: '14px', fontWeight: 500 }}>{r.name || r.Name}</td>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '14px' }}>{r.phone_number || r.phone || '—'}</td>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)', color: 'var(--text-muted)', fontSize: '13px', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.address || '—'}</td>
