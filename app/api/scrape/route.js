@@ -1,6 +1,12 @@
 const SCRAPER_URL = process.env.SCRAPER_API_URL || ''
 
 export async function POST(req) {
+  if (!SCRAPER_URL) {
+    return Response.json({
+      error: 'El servicio de scraping no está configurado. Desplegá el backend en Railway y agregá SCRAPER_API_URL en las variables de entorno de Vercel.',
+    }, { status: 503 })
+  }
+
   const body = await req.json()
   try {
     const res = await fetch(`${SCRAPER_URL}/api/scrape`, {
@@ -11,6 +17,6 @@ export async function POST(req) {
     const data = await res.json()
     return Response.json(data, { status: res.status })
   } catch (err) {
-    return Response.json({ error: err.message }, { status: 500 })
+    return Response.json({ error: `No se pudo conectar con el scraper: ${err.message}` }, { status: 500 })
   }
 }
