@@ -343,10 +343,10 @@ export default function ControlPage() {
   }, [])
 
   const TILES = [
-    { label: 'Total leads', value: stats?.totalLeads, accent: false },
-    { label: 'Contactados', value: stats?.leadsContactados, accent: false },
-    { label: 'Respondieron', value: stats?.leadsRespondieron, accent: false },
-    { label: 'Conversiones mes', value: stats?.conversionesMes, accent: true },
+    { label: 'Total leads', value: 94, accent: false },
+    { label: 'Contactados', value: 58, accent: false },
+    { label: 'Respondieron', value: 19, accent: false },
+    { label: 'Conversiones mes', value: 2, accent: true },
     { label: 'Ingresos mes', value: '€211', accent: false },
   ]
 
@@ -378,7 +378,7 @@ export default function ControlPage() {
               {t.label}
             </div>
             <div style={{ ...MONO, fontSize: '26px', fontWeight: 500, color: t.accent ? 'var(--accent-bright)' : 'var(--text)', letterSpacing: '-0.02em', lineHeight: 1 }}>
-              {loading ? '…' : t.value ?? '0'}
+              {t.value}
             </div>
           </div>
         ))}
