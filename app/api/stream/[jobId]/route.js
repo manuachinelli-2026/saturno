@@ -1,4 +1,4 @@
-const SCRAPER_URL = process.env.SCRAPER_API_URL || ''
+const SCRAPER_URL = process.env.SCRAPER_API_URL || 'https://gmaps-scraper-web-production.up.railway.app'
 
 export async function GET(req, { params }) {
   const { jobId } = params
@@ -6,7 +6,6 @@ export async function GET(req, { params }) {
   const download = url.searchParams.get('download')
 
   if (download) {
-    // Return results as JSON
     try {
       const res = await fetch(`${SCRAPER_URL}/api/download/${jobId}`)
       const text = await res.text()
@@ -32,7 +31,8 @@ export async function GET(req, { params }) {
 }
 
 function parseCsv(text) {
-  const lines = text.trim().split('\n')
+  const lines = text.trim().split('
+')
   if (lines.length < 2) return []
   const headers = lines[0].split(',').map(h => h.replace(/^"|"$/g,'').trim())
   return lines.slice(1).map(line => {
