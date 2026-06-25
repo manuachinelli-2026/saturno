@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import Link from 'next/link'
+import { supabase } from '@/lib/supabase'
 
 const MONO = { fontFamily: "'JetBrains Mono', monospace" }
 
@@ -80,27 +81,87 @@ function Launcher({ onLaunch }) {
     if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
   }, [log])
 
+  function addLog(msg) {
+    setLog(p => [...p, `[${new Date().toLocaleTimeString()}] ${msg}`])
+  }
+
   async function launch() {
     if (!industry || !city || running) return
     setRunning(true)
     setLog([`[${new Date().toLocaleTimeString()}] Iniciando pipeline...`])
 
     try {
+      // 1. Start scrape job
       const res = await fetch('/api/pipeline/launch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ industry, city, count: parseInt(count) }),
       })
       const d = await res.json()
-      if (d.success) {
-        setLog(p => [...p,
-          `[${new Date().toLocaleTimeString()}] Job ID: ${d.jobId}`,
-          `[${new Date().toLocaleTimeString()}] Scraping en proceso...`,
-          `[${new Date().toLocaleTimeString()}] Los mensajes se envian al finalizar`,
-        ])
-        if (onLaunch) onLaunch()
-      } else {
+      if (!d.success) {
         setLog(p => [...p, `[ERROR] ${d.error || 'Error desconocido'}`])
+        setRunning(false)
+        return
+      }
+
+      const jobId = d.jobId
+      addLog(`Job iniciado: ${jobId}`)
+      addLog('Scrapeando negocios...')
+
+      // 2. Stream progress
+      await new Promise((resolve) => {
+        const es = new EventSource(`/api/stream/${jobId}`)
+        es.onmessage = (e) => {
+          try {
+            const ev = JSON.parse(e.data)
+            if (ev.status === 'progress' && ev.current_name) {
+              addLog(`Encontrado: ${ev.current_name} (${ev.current || 0}/${ev.total || count})`)
+            }
+            if (ev.status === 'complete' || ev.status === 'done') {
+              es.close()
+              resolve()
+            }
+          } catch {}
+        }
+        es.onerror = () => { es.close(); resolve() }
+      })
+
+      // 3. Download results
+      addLog('Descargando resultados...')
+      const dlRes = await fetch(`/api/stream/${jobId}?download=1`)
+      const dlData = await dlRes.json()
+      const items = dlData.results || []
+
+      if (!items.length) {
+        addLog('No se encontraron resultados.')
+        setRunning(false)
+        return
+      }
+
+      // 4. Save to Supabase
+      addLog(`Guardando ${items.length} leads en base de datos...`)
+      const rows = items
+        .filter(r => r.name || r.Name)
+        .map(r => ({
+          name: r.name || r.Name || '',
+          phone: (r.phone_number || r.phone || '').replace(/\D/g, ''),
+          address: r.address || '',
+          website: r.website || '',
+          industry,
+          city,
+          reviews_count: parseInt(r.reviews_count) || 0,
+          reviews_average: parseFloat(r.reviews_average) || 0,
+          opens_at: r.opens_at || '',
+          introduction: r.introduction || '',
+          status: 'nuevo',
+        }))
+
+      const { error: insErr } = await supabase.from('leads').insert(rows)
+      if (insErr) {
+        addLog(`Error al guardar: ${insErr.message}`)
+      } else {
+        addLog(`✓ ${rows.length} leads guardados en Supabase`)
+        if (onLaunch) onLaunch()
       }
     } catch (e) {
       setLog(p => [...p, `[ERROR] ${e.message}`])
