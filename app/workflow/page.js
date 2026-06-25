@@ -11,30 +11,37 @@ const TYPES = {
   delay:   { color: '#f59e0b', bg: 'rgba(245,158,11,0.10)', tag: 'Espera' },
   ai:      { color: '#23d18b', bg: 'rgba(35,209,139,0.10)', tag: 'IA' },
   end:     { color: '#f43f5e', bg: 'rgba(244,63,94,0.10)',  tag: 'Fin' },
+  tool:    { color: '#e879f9', bg: 'rgba(232,121,249,0.10)', tag: 'Tool' },
 }
 
-let _id = 9
+let _id = 12
 const uid = () => String(_id++)
 
 const INIT_NODES = [
-  { id:'1', type:'trigger', icon:'📍', label:'Lead scrapeado',  x:60,  y:150 },
-  { id:'2', type:'action',  icon:'💬', label:'Mensaje inicial', x:330, y:150 },
-  { id:'3', type:'delay',   icon:'⏱',  label:'Esperar 3 días',  x:600, y:150 },
-  { id:'4', type:'action',  icon:'🔄', label:'Follow-up 1',     x:870, y:150 },
-  { id:'5', type:'delay',   icon:'⏱',  label:'Esperar 7 días',  x:1140, y:150 },
-  { id:'6', type:'action',  icon:'🔄', label:'Follow-up 2',     x:1410, y:150 },
-  { id:'7', type:'ai',      icon:'🤖', label:'Agente IA',       x:600, y:320 },
-  { id:'8', type:'end',     icon:'✅', label:'Conversión',      x:870, y:320 },
+  { id:'1',  type:'trigger', icon:'📍', label:'Lead scrapeado',  x:60,   y:150 },
+  { id:'2',  type:'action',  icon:'💬', label:'Mensaje inicial', x:330,  y:150 },
+  { id:'3',  type:'delay',   icon:'⏱',  label:'Esperar 3 días',  x:600,  y:150 },
+  { id:'4',  type:'action',  icon:'🔄', label:'Follow-up 1',     x:870,  y:150 },
+  { id:'5',  type:'delay',   icon:'⏱',  label:'Esperar 7 días',  x:1140, y:150 },
+  { id:'6',  type:'action',  icon:'🔄', label:'Follow-up 2',     x:1410, y:150 },
+  { id:'7',  type:'ai',      icon:'🤖', label:'Agente IA',       x:600,  y:320 },
+  { id:'8',  type:'end',     icon:'✅', label:'Conversión',      x:870,  y:320 },
+  { id:'9',  type:'tool',    icon:'🔎', label:'WebAnalyser',     x:1140, y:320 },
+  { id:'10', type:'tool',    icon:'🌐', label:'WebCreator',      x:1410, y:320 },
+  { id:'11', type:'tool',    icon:'📦', label:'Collection',      x:1680, y:320 },
 ]
 
 const INIT_EDGES = [
-  { id:'e1', s:'1', t:'2' },
-  { id:'e2', s:'2', t:'3' },
-  { id:'e3', s:'3', t:'4' },
-  { id:'e4', s:'4', t:'5' },
-  { id:'e5', s:'5', t:'6' },
-  { id:'e6', s:'2', t:'7' },
-  { id:'e7', s:'7', t:'8' },
+  { id:'e1',  s:'1',  t:'2'  },
+  { id:'e2',  s:'2',  t:'3'  },
+  { id:'e3',  s:'3',  t:'4'  },
+  { id:'e4',  s:'4',  t:'5'  },
+  { id:'e5',  s:'5',  t:'6'  },
+  { id:'e6',  s:'2',  t:'7'  },
+  { id:'e7',  s:'7',  t:'8'  },
+  { id:'e8',  s:'8',  t:'9'  },
+  { id:'e9',  s:'9',  t:'10' },
+  { id:'e10', s:'10', t:'11' },
 ]
 
 export default function WorkflowPage() {
@@ -205,26 +212,20 @@ export default function WorkflowPage() {
               const hov = hovEdge === edge.id
               return (
                 <g key={edge.id}>
-                  {/* Fat invisible hit area */}
-                  <path
-                    d={d} stroke="transparent" strokeWidth={18} fill="none"
+                  <path d={d} stroke="transparent" strokeWidth={18} fill="none"
                     style={{ pointerEvents: 'stroke', cursor: 'pointer' }}
                     onMouseEnter={() => hoverEdge(edge.id)}
                     onMouseLeave={unhoverEdge}
                   />
-                  {/* Visible cable */}
-                  <path
-                    d={d}
+                  <path d={d}
                     stroke={hov ? '#a06aff' : '#1c1c32'}
                     strokeWidth={hov ? 2 : 1.5}
                     fill="none"
                     markerEnd={hov ? 'url(#arr-h)' : 'url(#arr)'}
                     style={{ pointerEvents: 'none', transition: 'stroke 0.12s, stroke-width 0.12s' }}
                   />
-                  {/* Delete button at midpoint */}
                   {hov && (
-                    <g
-                      transform={`translate(${mx},${my})`}
+                    <g transform={`translate(${mx},${my})`}
                       style={{ pointerEvents: 'all', cursor: 'pointer' }}
                       onMouseEnter={() => hoverEdge(edge.id)}
                       onMouseLeave={unhoverEdge}
@@ -259,12 +260,9 @@ export default function WorkflowPage() {
                   transition: 'box-shadow 0.15s',
                 }}
               >
-                {/* Type badge */}
                 <div style={{ fontSize: '9px', fontWeight: 700, color: T.color, textTransform: 'uppercase', letterSpacing: '.07em', marginBottom: '5px' }}>
                   {T.tag}
                 </div>
-
-                {/* Label row */}
                 <div style={{ display: 'flex', alignItems: 'center', gap: '7px' }}>
                   <span style={{ fontSize: '15px', flexShrink: 0 }}>{node.icon}</span>
                   {editId === node.id ? (
@@ -289,7 +287,6 @@ export default function WorkflowPage() {
                   )}
                 </div>
 
-                {/* Delete node button */}
                 <button
                   onMouseDown={e => e.stopPropagation()}
                   onClick={e => { e.stopPropagation(); deleteNode(node.id) }}
